@@ -10,9 +10,9 @@ public class Constrain {
 	public static String DEFAULT_DATASOURCE_NAME = "LTE_Datasource";
 	
 	//Novel
-	public static String LOCAL_CONFIG_PATH = "D:/TEST/";
+	public static String LOCAL_CONFIG_PATH = "G:\\TXT\\configs.txt";
 	public static String TEST_URL = "https://www.google.com/";
-	public static String TEST_COOKIES = "depends on wbesites";
+	public static String FILEDIRECTORY = "G:\\TXT\\Novel";
 	
 	public static DbUtils DEFAULT_DB = null;
 	

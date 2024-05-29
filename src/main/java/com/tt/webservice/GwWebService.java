@@ -16,6 +16,7 @@ import java.util.zip.GZIPInputStream;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
+import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
 import com.tt.enums.CustErrorCode;
@@ -293,9 +294,8 @@ public class GwWebService {
 		}
 		return content;
 	}
-
 	public Document urlToJsoupDoc(Map<String, String> urlData) {
-		System.out.println("urlToIs");
+		// System.out.println("urlToIs");
 		HttpURLConnection connection = null;
 		InputStream is = null;
 		Document doc = null;
@@ -303,19 +303,22 @@ public class GwWebService {
 			if (urlData == null || urlData.isEmpty()) {
 				return null;
 			}
+
 			String urlStr = urlData.get("url");
-			if (StringUtils.isBlank(urlStr) || !urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
-				return null;
-			}
 			String cookie = urlData.get("Cookie");
 			String referer = urlData.get("Referer");
-			if (StringUtils.isBlank(cookie)) {
+
+			if (StringUtils.isBlank(urlStr) || (!urlStr.startsWith("http://") && !urlStr.startsWith("https://"))) {
+				System.out.println("urlToInputStream() urlStr is null or not start with http:// or https:// :" + urlStr);
 				return null;
 			}
-			if (StringUtils.isBlank(referer)) {
+	
+			if (StringUtils.isBlank(cookie) || StringUtils.isBlank(referer)) {
+				System.out.println("cookie or referer is null:" + cookie + " " + referer);
 				return null;
 			}
-			System.out.println("done check urlData");
+			// System.out.println("done check urlData");
+			
 			connection = (HttpURLConnection) new URL(urlStr).openConnection();
 			connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml");
 			connection.setRequestProperty("Accept-Encoding", "gzip");// TODO other encoding
@@ -326,15 +329,17 @@ public class GwWebService {
 			connection.setRequestProperty("Referer", urlData.get("Referer"));
 			connection.setRequestProperty("User-Agent",
 					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0");
-			System.out.println("connection." + connection.toString());
+			// System.out.println("connection : " + connection.toString());
+			// logInfoPrint("connection : " + connection.toString());
 			if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-				System.out.println("HTTP_OK");
+				logInfoPrint("HTTP_OK:" + urlStr);
+				// System.out.println("HTTP_OK");
 				is = connection.getInputStream();
 				try {
 					if (CommonUtils.getInstance().inputStreamHasData(is)) {
 						// TODO other encoding
 						is = new GZIPInputStream(is);
-						doc = org.jsoup.Jsoup.parse(is, "UTF-8", "");
+						doc = Jsoup.parse(is, "UTF-8", "");
 					} else {
 						System.out.println("url IS no data");
 					}
@@ -359,5 +364,61 @@ public class GwWebService {
 		}
 		return doc;
 	}
+
+	public InputStream urlToInputStream(Map<String, String> urlData) throws IOException {
+        if (urlData == null || urlData.isEmpty()) {
+            return null;
+        }
+
+        String urlStr = urlData.get("url");
+        String cookie = urlData.get("Cookie");
+        String referer = urlData.get("Referer");
+
+        if (StringUtils.isBlank(urlStr) || (!urlStr.startsWith("http://") && !urlStr.startsWith("https://"))) {
+            System.out.println("urlToInputStream() urlStr is null or not start with http:// or https:// :" + urlStr);
+			return null;
+        }
+
+        if (StringUtils.isBlank(cookie) || StringUtils.isBlank(referer)) {
+            System.out.println("cookie or referer is null:" + cookie + " " + referer);
+			return null;
+        }
+
+        URL url = new URL(urlStr);
+        HttpURLConnection connection = null;
+        InputStream inputStream = null;
+
+        try {
+            connection = (HttpURLConnection) url.openConnection();
+            setRequestProperties(connection, urlData);
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+				
+                inputStream = connection.getInputStream();
+				// TODO other encoding
+				inputStream = new GZIPInputStream(inputStream);
+            } else {
+                System.out.println("HTTP Error: " + responseCode);
+            }
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+
+        return inputStream;
+    }
+
+	void setRequestProperties(HttpURLConnection connection, Map<String, String> urlData) {
+        connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml");
+        connection.setRequestProperty("Accept-Encoding", "gzip");// TODO other encoding
+        connection.setRequestProperty("Accept-Language", "zh-TW,zh");
+        connection.setRequestProperty("Cache-Control", "max-age=0");
+        connection.setRequestProperty("Accept-Charset", "UTF-8");
+        connection.setRequestProperty("Cookie", urlData.get("Cookie"));
+        connection.setRequestProperty("Referer", urlData.get("Referer"));
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0");
+    }
 
 }

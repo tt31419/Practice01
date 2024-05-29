@@ -1,6 +1,8 @@
 package com.tt.util;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
@@ -12,6 +14,10 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -82,8 +88,7 @@ public class CommonUtils {
 			if (instance == null) {
 				instance = new CommonUtils();
 			}
-			// 20240524 not using log4j
-			// instance.initLog(null);
+			instance.initLog(null);
 		} catch (Throwable e) {
 			e.printStackTrace();
 		}
@@ -684,11 +689,6 @@ public class CommonUtils {
 		return sb.toString();
 	}
 
-	public String getLocalTxt(String inputPath) {
-
-		return "";
-	}
-
 	public String toTraditional(String input) {
 		return ZhTwConverterUtil.toTraditional(input);
 	}
@@ -703,5 +703,39 @@ public class CommonUtils {
 		}
 	}
 
+	public boolean createTxtFile(String filePath, String fileName, StringBuilder content) {
+		try {
+			if (!filePath.endsWith("/")) {
+				filePath += "/";
+			}
+			Path path = Paths.get(filePath);
+			if (!Files.exists(path)) {
+				Files.createDirectories(path);
+			}
+			BufferedWriter writer = Files.newBufferedWriter(Paths.get(filePath + fileName), StandardCharsets.UTF_8);
+			writer.write(content.toString());
+			writer.close();
 
+			System.out.println(filePath + fileName + ".txt");
+
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+
+	public boolean moveFile(String sourcePath, String targetPath) {
+		try {
+			File sourceFile = new File(sourcePath);
+			File targetFile = new File(targetPath);
+			if (sourceFile.exists()) {
+				sourceFile.renameTo(targetFile);
+				return true;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
 }

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -15,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -27,19 +30,25 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import com.tt.Constrain;
 import com.tt.model.Masiro;
 import com.tt.util.CommonUtils;
 import com.tt.webservice.GwWebService;
 
+/**
+ * wait until daemon to move in
+ */
 public class GetNovels {
-    private static String CONFIGS = "G:\\TXT\\configs.txt";
-    private static String FILEDIRECTORY = "G:\\TXT\\Novel";
 
     public static void main(String[] args) {
         try {
+            CommonUtils.loadLog4j();
+            Logger log = Logger.getLogger("NovelTest");
+            log.info("local main.");
+
             Map<String, Map<String, String>> configsMap = new HashMap<>();
 
-            try (BufferedReader reader = new BufferedReader(new FileReader(CONFIGS))) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(Constrain.LOCAL_CONFIG_PATH))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.isEmpty() || line.trim().equals("")) {
@@ -60,35 +69,37 @@ public class GetNovels {
                             // System.out.println("key: " + key + " value: " + value);
                         }
                     }
-                    System.out.println("Book " + book);
-                    System.out.println(configMap);
+                    // System.out.println("Book " + book);
+                    // System.out.println(configMap);
                     configsMap.put(book, configMap);
                 }
             } catch (IOException e) {
                 System.out.println("main get config " + e.getMessage());
             }
 
-            File directory = new File(FILEDIRECTORY);
+            File directory = new File(Constrain.FILEDIRECTORY);
             File[] folders = directory.listFiles(File::isDirectory);
             if (folders != null) {
                 for (File folder : folders) {
                     String folderName = folder.getName();
-                    System.out.println("Folder Name: " + folderName);
-
+                    // System.out.println("Folder Name: " + folderName);
+                    // testing ignore other folders
                     if (!"linovelib".equals(folderName)) {
                         continue;
                     }
 
                     Map<String, String> configMap = configsMap.get(folderName);
                     if (configMap != null) {
-                        System.out.println("configMap != null: ");
+                        System.out.println("configMap Success");
                         File[] txtFiles = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".txt"));
                         if (txtFiles != null) {
                             for (File txtFile : txtFiles) {
+                                StringBuilder txtContent = new StringBuilder();
                                 String txtName = txtFile.getName();
                                 System.out.println("txtName: " + txtName);
                                 // txtName : "小說名稱_urlID_總共章節數量_更新日期.txt"
-                                if (!txtName.matches(".*_\\d+_\\d+_\\d+\\.txt")) {
+                                // ".*_\\d+_\\d+_\\d+\\.txt"
+                                if (!txtName.matches(configMap.get("regex"))) {
                                     System.out.println("Illegal txt file name: " + txtName);
                                 } else {
                                     System.out.println("======Starting: " + txtName);
@@ -110,8 +121,9 @@ public class GetNovels {
 
                                             System.out.println("novelConfig: " + novelConfig);
 
-                                            InputStream is = null;
-                                            Document doc = GwWebService.getInstance(null).urlToJsoupDoc(novelConfig);
+                                            InputStream is = GwWebService.getInstance(null)
+                                                    .urlToInputStream(novelConfig);
+                                            Document doc = Jsoup.parse(is, "UTF-8", "");
                                             System.out.println("is: " + is);
                                             // InputStream is = new URL(url).openStream();
                                             if (CommonUtils.getInstance().inputStreamHasData(is)) {
@@ -163,54 +175,139 @@ public class GetNovels {
                                     } else if ("linovelib".equals(folderName)) {
                                         // view = + "*/catalog"
                                         System.out.println("linovelib prepare to get novel");
-                                        //TODO linovelib & Masiro combine to urlNovel
+                                        // TODO linovelib & Masiro combine to urlNovel
                                         Masiro novel = new Masiro(txtName);
-                                        Map<String, String> novelConfig = new HashMap<>();
-                                        String viewUrl = (configMap.get("view").startsWith("https")
+                                        Map<String, String> urlConfigMap = new HashMap<>();
+                                        String urlBase = (configMap.get("view").startsWith("https")
                                                 ? configMap.get("view")
-                                                : "https://" + configMap.get("view")) + novel.getUrlID() + "/catalog";
-                                        novelConfig.put("url", viewUrl);
-                                        novelConfig.put("Cookie", configMap.get("Cookie"));
-                                        novelConfig.put("Referer", viewUrl);
+                                                : "https://" + configMap.get("view")) + novel.getUrlID();
+                                        String viewUrl = urlBase + "/catalog";
+                                        urlConfigMap.put("url", viewUrl);
+                                        urlConfigMap.put("Cookie", configMap.get("Cookie"));
+                                        urlConfigMap.put("Referer", viewUrl);
 
-                                        System.out.println("novelConfig: " + novelConfig);
+                                        System.out.println("novelConfig: " + urlConfigMap);
 
-                                        InputStream is = null;
-                                        // InputStream is = new URL(url).openStream();
-                                        Document doc = GwWebService.getInstance(null).urlToJsoupDoc(novelConfig);
-                                        if (CommonUtils.getInstance().inputStreamHasData(is)) {
-                                            System.out.println("is has data");
-                                            doc = Jsoup.parse(is, "UTF-8", "");
-                                            is.close();
-                                        } else {
-                                            System.out.println("is is null");
-                                        } // end of if (CommonUtils.getInstance().inputStreamHasData(is))
-                                        
-                                        
-
-                                        String title = doc.select("title").first().text();
+                                        // InputStream is =
+                                        // GwWebService.getInstance(null).urlToInputStream(novelConfig);
+                                        // Document doc = Jsoup.parse(is, "UTF-8", "");
+                                        Document viewDoc = GwWebService.getInstance(log).urlToJsoupDoc(urlConfigMap);
+                                        // start view
+                                        String title = viewDoc.select("title").first().text();
                                         System.out.println("title ------== " + title);
-                                        String chapterUrlId = "";
+                                        String nextUrlString = "";
+                                        
                                         String chapterUrlName = "";
-                                        Elements chaptersElements = doc.select(".chapter-li.jsChapter a");
+                                        Elements chaptersElements = viewDoc.select(".chapter-li.jsChapter a");
                                         for (Element chapterElement : chaptersElements) {
-                                            chapterUrlId = chapterElement.attr("href");
+                                            nextUrlString = chapterElement.attr("href");
                                             chapterUrlName = chapterElement.text();
-                                            System.out.println("Chapter URL ID: " + chapterUrlId
+                                            System.out.println("nextUrlString : " + nextUrlString
                                                     + ", Chapter URL Name: " + chapterUrlName);
-                                            if (chapterUrlId.startsWith("j")) {
+                                            // consider will stciprt is javascript.cid(0)
+                                            if (nextUrlString.startsWith("j")) {
                                                 continue;
                                             } else {
+                                                // only need to get the first chapter, next chapter will be int +1
                                                 break;
                                             }
                                         }
+                                        // end view
+
+                                        // start chapter loop
+                                        int loopcount = 0;
+                                        int chapterCount = 0;
+                                        if (!StringUtils.isBlank(nextUrlString)) {
+                                            while (!StringUtils.isBlank(nextUrlString)) {
+                                                Thread.sleep(5500);
+                                                System.out.println(loopcount + " loopcount: " + nextUrlString);
+                                                // if (loopcount > 2) {
+                                                //     break;
+                                                // }
+
+                                                if (nextUrlString.endsWith(".html")) {
+                                                    boolean isNewChapter = true;
+                                                    if(!StringUtils.contains(nextUrlString, "_")) {
+                                                        chapterCount++;
+                                                        isNewChapter = false;
+                                                    }
+                                                    
+                                                    urlConfigMap.replace("Referer", urlConfigMap.get("url"));
+                                                    urlConfigMap.replace("url", (nextUrlString.startsWith("https")
+                                                            ? nextUrlString
+                                                            : "https://" + configMap.get("read") + nextUrlString));
+                                                    
+                                                    System.out.println("urlConfig: " + urlConfigMap);
+                                                    Document chapterDoc = GwWebService.getInstance(log)
+                                                            .urlToJsoupDoc(urlConfigMap);
+                                                    
+                                                    if (isNewChapter) {
+                                                        String chapterTitle = chapterDoc.select("#atitle").first().text();
+                                                        txtContent.append("\n\n"); // Add a newline before each chapter
+                                                        txtContent.append(chapterTitle + "\n\n");
+                                                    }
+                                                    
+
+
+                                                    Elements paragraphs = chapterDoc.select("div#acontent1 p");
+                                                    Elements lineBreaks = chapterDoc.select("div#acontent1 br");
+
+                                                    Elements combinedElements = new Elements();
+                                                    combinedElements.addAll(paragraphs);
+                                                    combinedElements.addAll(lineBreaks);
+
+                                                    combinedElements.sort((element1, element2) -> Integer.compare(
+                                                            element1.elementSiblingIndex(),
+                                                            element2.elementSiblingIndex()));
+
+                                                    for (Element paragraph : paragraphs) {
+                                                        if (paragraph.tagName().equals("p")) {
+                                                            txtContent.append(paragraph.text());
+                                                        } else if (paragraph.tagName().equals("br")) {
+                                                            txtContent.append("\n\n");
+                                                        }
+
+                                                        txtContent.append("\n"); // Add a newline after each paragraph
+                                                    }   // end of for (Element paragraph : paragraphs)
+
+                                                    // System.out.println("Chapter Title: " + chapterTitle);
+                                                    // System.out.println("Chapter Content: " + txtContent);
+
+                                                    Element linkElement = chapterDoc.select("link[rel=prerender]").first();
+                                                    nextUrlString = linkElement.attr("href");
+                                                    // System.out.println("Next URL: " + nextUrlString);
+                                                }else{
+                                                    nextUrlString = "";
+                                                }  // end if (nextUrlString.endsWith(".html"))
+                                                loopcount++;
+                                            } // end of while (!StringUtils.isBlank(nextUrlString))
+                                        } // end of if (!StringUtils.isBlank(nextUrlString))
+
+                                        // txtContent
+                                        // newTxtName : "小說名稱_urlID_總共章節數量_更新日期
+                                        
+                                        if(novel.isUpdate(chapterCount)){
+                                            System.out.println("chapterCount: ===" + chapterCount);
+                                            if (CommonUtils.getInstance(log).createTxtFile(folder.getAbsolutePath(), novel.getNewTxtName(chapterCount) + novel.getFileType(), txtContent)){
+                                                System.out.println("Create txt file success: " + novel.getNewTxtName(chapterCount));
+                                                System.out.println("txtFile.getAbsolutePath(): " + txtFile.getAbsolutePath());
+                                                // txtFile.delete();
+                                                CommonUtils.getInstance(log).moveFile(txtFile.getAbsolutePath(), folder.getAbsolutePath() + "\\old\\" + novel.getOldTxtName() + novel.getFileType());
+                                            }
+                                        }
+                                        System.out.println("chapterCount: " + chapterCount);
+                                        System.out.println("novel.getNewTxtName(chapterCount): " + novel.getNewTxtName(chapterCount));
                                     } // end of if ("Masiro_XXX".equals(folderName))
                                 } // end of if (!txtName.matches)
                             } // end of for (File txtFile : txtFiles)
                         } // end of if (txtFiles != null)
-                    }
-                }
-            }
+                    } else {
+                        System.out.println("Missing configMap" + folderName);
+                    } // end of if (configMap != null)
+                } // end of for (File folder : folders)
+            } else {
+                System.out.println("Error: folders is null: " + Constrain.FILEDIRECTORY);
+            } // end of if (folders != null)
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("main " + e.getMessage());
