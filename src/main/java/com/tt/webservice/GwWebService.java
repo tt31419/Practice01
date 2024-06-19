@@ -10,6 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
@@ -294,6 +295,7 @@ public class GwWebService {
 		}
 		return content;
 	}
+
 	public Document urlToJsoupDoc(Map<String, String> urlData) {
 		// System.out.println("urlToIs");
 		HttpURLConnection connection = null;
@@ -309,43 +311,54 @@ public class GwWebService {
 			String referer = urlData.get("Referer");
 
 			if (StringUtils.isBlank(urlStr) || (!urlStr.startsWith("http://") && !urlStr.startsWith("https://"))) {
-				System.out.println("urlToInputStream() urlStr is null or not start with http:// or https:// :" + urlStr);
+				System.out
+						.println("urlToInputStream() urlStr is null or not start with http:// or https:// :" + urlStr);
 				return null;
 			}
-	
+
 			if (StringUtils.isBlank(cookie) || StringUtils.isBlank(referer)) {
 				System.out.println("cookie or referer is null:" + cookie + " " + referer);
 				return null;
 			}
 			// System.out.println("done check urlData");
+			System.out.println("urlStr : " + urlStr);
+			
 			
 			connection = (HttpURLConnection) new URL(urlStr).openConnection();
-			connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml");
-			connection.setRequestProperty("Accept-Encoding", "gzip");// TODO other encoding
-			connection.setRequestProperty("Accept-Language", "zh-TW,zh");
-			connection.setRequestProperty("Cache-Control", "max-age=0");
-			connection.setRequestProperty("Accept-Charset", "UTF-8");
-			connection.setRequestProperty("Cookie", urlData.get("Cookie"));
-			connection.setRequestProperty("Referer", urlData.get("Referer"));
-			connection.setRequestProperty("User-Agent",
-					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0");
+			this.setRequestProperties(connection, urlData);
+			// connection.setRequestProperty("Accept",
+			// "text/html,application/xhtml+xml,application/xml");
+			// connection.setRequestProperty("Accept-Encoding", "gzip");// TODO other
+			// encoding
+			// connection.setRequestProperty("Accept-Language", "zh-TW,zh");
+			// connection.setRequestProperty("Cache-Control", "max-age=0");
+			// connection.setRequestProperty("Accept-Charset", "UTF-8");
+			// connection.setRequestProperty("Cookie", urlData.get("Cookie"));
+			// connection.setRequestProperty("Referer", urlData.get("Referer"));
+			// connection.setRequestProperty("User-Agent",
+			// "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like
+			// Gecko) Chrome/124.0.0.0");
+
 			// System.out.println("connection : " + connection.toString());
 			// logInfoPrint("connection : " + connection.toString());
 			if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
 				logInfoPrint("HTTP_OK:" + urlStr);
-				// System.out.println("HTTP_OK");
-				is = connection.getInputStream();
+				System.out.println("HTTP_OK");
+				is = new GZIPInputStream(connection.getInputStream());
 				try {
 					if (CommonUtils.getInstance().inputStreamHasData(is)) {
 						// TODO other encoding
-						is = new GZIPInputStream(is);
+						// if ("gzip".equals(connection.getContentEncoding())) {
+						// 	is = new GZIPInputStream(is);
+						// }
+
 						doc = Jsoup.parse(is, "UTF-8", "");
 					} else {
-						System.out.println("url IS no data");
+						System.out.println("url IS no data" );
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
-					// System.out.println("GZIPInputStream" + e.getMessage());
+					// System.out.println("GZIPInputStream :" + e.getMessage());
 				}
 			} else {
 				System.out.println("HTTP Error: " + connection.getResponseCode());
@@ -365,60 +378,63 @@ public class GwWebService {
 		return doc;
 	}
 
-	public InputStream urlToInputStream(Map<String, String> urlData) throws IOException {
-        if (urlData == null || urlData.isEmpty()) {
-            return null;
-        }
+	// public InputStream urlToInputStream(Map<String, String> urlData) throws
+	// IOException {
+	// if (urlData == null || urlData.isEmpty()) {
+	// return null;
+	// }
 
-        String urlStr = urlData.get("url");
-        String cookie = urlData.get("Cookie");
-        String referer = urlData.get("Referer");
+	// String urlStr = urlData.get("url");
+	// String cookie = urlData.get("Cookie");
+	// String referer = urlData.get("Referer");
 
-        if (StringUtils.isBlank(urlStr) || (!urlStr.startsWith("http://") && !urlStr.startsWith("https://"))) {
-            System.out.println("urlToInputStream() urlStr is null or not start with http:// or https:// :" + urlStr);
-			return null;
-        }
+	// if (StringUtils.isBlank(urlStr) || (!urlStr.startsWith("http://") &&
+	// !urlStr.startsWith("https://"))) {
+	// System.out.println("urlToInputStream() urlStr is null or not start with
+	// http:// or https:// :" + urlStr);
+	// return null;
+	// }
 
-        if (StringUtils.isBlank(cookie) || StringUtils.isBlank(referer)) {
-            System.out.println("cookie or referer is null:" + cookie + " " + referer);
-			return null;
-        }
+	// if (StringUtils.isBlank(cookie) || StringUtils.isBlank(referer)) {
+	// System.out.println("cookie or referer is null:" + cookie + " " + referer);
+	// return null;
+	// }
 
-        URL url = new URL(urlStr);
-        HttpURLConnection connection = null;
-        InputStream inputStream = null;
+	// URL url = new URL(urlStr);
+	// HttpURLConnection connection = null;
+	// InputStream inputStream = null;
 
-        try {
-            connection = (HttpURLConnection) url.openConnection();
-            setRequestProperties(connection, urlData);
+	// try {
+	// connection = (HttpURLConnection) url.openConnection();
+	// setRequestProperties(connection, urlData);
 
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-				
-                inputStream = connection.getInputStream();
-				// TODO other encoding
-				inputStream = new GZIPInputStream(inputStream);
-            } else {
-                System.out.println("HTTP Error: " + responseCode);
-            }
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
+	// int responseCode = connection.getResponseCode();
+	// if (responseCode == HttpURLConnection.HTTP_OK) {
 
-        return inputStream;
-    }
+	// inputStream = connection.getInputStream();
+	// // TODO other encoding
+	// inputStream = new GZIPInputStream(inputStream);
+	// } else {
+	// System.out.println("HTTP Error: " + responseCode);
+	// }
+	// } finally {
+	// if (connection != null) {
+	// connection.disconnect();
+	// }
+	// }
+
+	// return inputStream;
+	// }
 
 	void setRequestProperties(HttpURLConnection connection, Map<String, String> urlData) {
-        connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml");
-        connection.setRequestProperty("Accept-Encoding", "gzip");// TODO other encoding
-        connection.setRequestProperty("Accept-Language", "zh-TW,zh");
-        connection.setRequestProperty("Cache-Control", "max-age=0");
-        connection.setRequestProperty("Accept-Charset", "UTF-8");
-        connection.setRequestProperty("Cookie", urlData.get("Cookie"));
-        connection.setRequestProperty("Referer", urlData.get("Referer"));
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0");
-    }
-
+		connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml");
+		connection.setRequestProperty("Accept-Encoding", "gzip");// TODO other encoding
+		connection.setRequestProperty("Accept-Language", "zh-TW,zh");
+		connection.setRequestProperty("Cache-Control", "max-age=0");
+		// connection.setRequestProperty("Accept-Charset", "UTF-8");
+		connection.setRequestProperty("Cookie", urlData.get("Cookie"));
+		connection.setRequestProperty("Referer", urlData.get("Referer"));
+		connection.setRequestProperty("User-Agent",
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0");
+	}
 }

@@ -4,34 +4,20 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.GZIPInputStream;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
-import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import com.github.houbb.opencc4j.util.ZhTwConverterUtil;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import com.tt.Constrain;
-import com.tt.model.Masiro;
+import com.tt.model.Novel;
 import com.tt.util.CommonUtils;
 import com.tt.webservice.GwWebService;
 
@@ -82,11 +68,11 @@ public class GetNovels {
             if (folders != null) {
                 for (File folder : folders) {
                     String folderName = folder.getName();
-                    // System.out.println("Folder Name: " + folderName);
+                    System.out.println("Folder Name: " + folderName);
                     // testing ignore other folders
-                    if (!"linovelib".equals(folderName)) {
-                        continue;
-                    }
+                    // if (!"linovelib".equals(folderName)) {
+                    // continue;
+                    // }
 
                     Map<String, String> configMap = configsMap.get(folderName);
                     if (configMap != null) {
@@ -103,17 +89,19 @@ public class GetNovels {
                                     System.out.println("Illegal txt file name: " + txtName);
                                 } else {
                                     System.out.println("======Starting: " + txtName);
+                                    Novel novel = new Novel(txtName);
+
+                                    Map<String, String> novelConfig = new HashMap<>();
                                     // Class<?> clazz = Class.forName("tt.model." + folderName.substring(0,
                                     // 1).toUpperCase() + folderName.substring(1).toLowerCase());
                                     // //assume the constructor is Masiro(String txtName)
                                     // Constructor<?> constructor = clazz.getDeclaredConstructor(String.class);
                                     // Object instance = constructor.newInstance(txtName);
                                     // instance.getClass().getMethod("getFileName").invoke(instance);
-                                    if ("Masiro_XXX".equals(folderName)) {
+                                    if ("Masiro".equals(folderName)) {
                                         try {
                                             System.out.println("Masiro prepare to get novel");
-                                            Masiro novel = new Masiro(txtName);
-                                            Map<String, String> novelConfig = new HashMap<>();
+                                            
                                             String viewUrl = "https://" + configMap.get("view") + novel.getUrlID();
                                             novelConfig.put("url", viewUrl);
                                             novelConfig.put("Cookie", configMap.get("Cookie"));
@@ -121,50 +109,135 @@ public class GetNovels {
 
                                             System.out.println("novelConfig: " + novelConfig);
 
-                                            InputStream is = GwWebService.getInstance(null)
-                                                    .urlToInputStream(novelConfig);
-                                            Document doc = Jsoup.parse(is, "UTF-8", "");
-                                            System.out.println("is: " + is);
-                                            // InputStream is = new URL(url).openStream();
-                                            if (CommonUtils.getInstance().inputStreamHasData(is)) {
-                                                doc = Jsoup.parse(is, "UTF-8", "");
+                                            Document doc = GwWebService.getInstance(null)
+                                                    .urlToJsoupDoc(novelConfig);
 
-                                                Element title = doc.select("title").first();
+                                            Element title = doc.select("title").first();
 
-                                                System.out.println("title ------== " + title.text());
-                                                System.out.println("traditionalTitle ------== "
-                                                        + CommonUtils.getInstance().toTraditional(title.text()));
-                                                // System.out.print("doc ------== " + doc.html());
+                                            System.out.println("traditionalTitle ------== "
+                                                    + CommonUtils.getInstance().toTraditional(title.text()));
+                                            // System.out.print("doc ------== " + doc.html());
 
-                                                Elements fChapterScripts = doc.select("#f-chapters-json");
-                                                com.google.gson.JsonArray fChapters = null;
-                                                if (fChapterScripts != null && !fChapterScripts.isEmpty()) {
-                                                    // only one element expected
-                                                    for (Element chapterStr : fChapterScripts) {
-                                                        fChapters = new JsonParser().parse(chapterStr.data())
-                                                                .getAsJsonArray();
+                                            Element fChapterScripts = doc.select("#f-chapters-json").first();
+                                            Element chapterScripts = doc.select("#chapters-json").first();
+                                            List<com.google.gson.JsonObject> fChaptersList = new ArrayList<>();
+                                            List<com.google.gson.JsonObject> chaptersList = new ArrayList<>();
+                                            Map<String, List<com.google.gson.JsonObject>> chapterMap = new HashMap<>();
+                                            if (fChapterScripts != null && !fChapterScripts.data().isEmpty()
+                                                    && chapterScripts != null && !chapterScripts.data().isEmpty()) {
+                                                com.google.gson.JsonArray fChapters = new com.google.gson.JsonParser()
+                                                        .parse(fChapterScripts.data()).getAsJsonArray();
+                                                com.google.gson.JsonArray chapters = new com.google.gson.JsonParser()
+                                                        .parse(chapterScripts.data()).getAsJsonArray();
+                                                for (com.google.gson.JsonElement fChapterElement : fChapters) {
+                                                    fChaptersList.add(fChapterElement.getAsJsonObject());
+                                                    // System.out.println("fChapter : " +
+                                                    // fChapterElement.getAsJsonObject());
+                                                }
+                                                for (com.google.gson.JsonElement chapterElement : chapters) {
+                                                    chaptersList.add(chapterElement.getAsJsonObject());
+                                                    // System.out.println("chapterElement : " + chapterElement);
+                                                }
+                                                Collections.sort(fChaptersList, (chapter1, chapter2) -> {
+                                                    int id1 = chapter1.getAsJsonObject().get("id").getAsInt();
+                                                    int id2 = chapter2.getAsJsonObject().get("id").getAsInt();
+                                                    return Integer.compare(id1, id2);
+                                                });
+                                                Collections.sort(chaptersList, (chapter1, chapter2) -> {
+                                                    int id1 = chapter1.getAsJsonObject().get("id").getAsInt();
+                                                    int id2 = chapter2.getAsJsonObject().get("id").getAsInt();
+                                                    return Integer.compare(id1, id2);
+                                                });
+
+                                                com.google.gson.JsonObject fChapter = null;
+                                                String nextUrlString = "";
+                                                String fChapterTitle = "";
+                                                int loopcount = 0;
+                                                int chapterCount = 0;
+                                                // int fChapterLoop = 0;
+                                                for (com.google.gson.JsonObject chapter : chaptersList) {
+                                                    // if(chapterCount < novel.getChapters()){
+                                                    // continue;
+
+                                                    // }
+                                                    String chapterTitle = chapter.get("title").getAsString();
+                                                    int chapterId = chapter.get("id").getAsInt();
+                                                    int parentId = chapter.get("parent_id").getAsInt();
+
+                                                    if (fChapter == null || fChapter.get("id").getAsInt() != parentId) {
+                                                        for (int i = 0; i < fChaptersList.size(); i++) {
+                                                            if (fChaptersList.get(i).get("id").getAsInt() == parentId) {
+                                                                fChapter = fChaptersList.get(i);
+                                                                fChapterTitle = fChapter.get("title").getAsString();
+                                                                // System.out.println("FChapter Title: " +
+                                                                // fChapterTitle);
+                                                                txtContent.append(CommonUtils.getInstance()
+                                                                        .toTraditional(fChapterTitle) + "\n\n\n");
+                                                                break;
+                                                            }
+                                                        }
+
+                                                    }
+
+                                                    txtContent.append(
+                                                            CommonUtils.getInstance().toTraditional(chapterTitle)
+                                                                    + "\n\n");
+
+                                                    nextUrlString = novelConfig.get("url");
+
+                                                    novelConfig.replace("Referer", nextUrlString);
+                                                    novelConfig.replace("url",
+                                                            "https://" + configMap.get("read") + chapterId);
+
+                                                    // System.out.println("novelConfig: " + novelConfig);
+                                                    Document chapterDoc = GwWebService.getInstance(log)
+                                                            .urlToJsoupDoc(novelConfig);
+
+                                                    if (chapterDoc == null) {
+                                                        System.out.println("chapterDoc is null");
+                                                        break;
+                                                    }
+                                                    Elements paragraphs = chapterDoc
+                                                            .select("div.box-body.nvl-content p");
+
+                                                    for (Element paragraph : paragraphs) {
+                                                        txtContent.append(CommonUtils.getInstance()
+                                                                .toTraditional(paragraph.text()));
+                                                        txtContent.append("\n"); // Add a newline after each paragraph
+                                                    } // end of for (Element paragraph : paragraphs)
+
+                                                    chapterCount++;
+                                                    // loopcount++;
+                                                    // if(loopcount > 3){
+                                                    // System.out.println("loopcount: " + loopcount);
+                                                    // break;
+                                                    // }
+                                                    Thread.sleep(10500);
+                                                    // System.out.println("txtContent: " + txtContent);
+                                                } // end of for (chaptersList)
+
+                                                // System.out.println("txtContent: " + txtContent);
+                                                System.out.println("total chapterCount: " + chapterCount);
+
+                                                if (novel.isUpdate(chapterCount)) {
+                                                    System.out.println("chapterCount: ===" + chapterCount);
+                                                    if (CommonUtils.getInstance(log).createTxtFile(
+                                                            folder.getAbsolutePath(),
+                                                            novel.getNewTxtName(chapterCount) + novel.getFileType(),
+                                                            txtContent)) {
+                                                        System.out.println("Create txt file success: "
+                                                                + novel.getNewTxtName(chapterCount));
+                                                        System.out.println(
+                                                                "txtFile.getAbsolutePath(): "
+                                                                        + txtFile.getAbsolutePath());
+                                                        // txtFile.delete();
+                                                        CommonUtils.getInstance(log).moveFile(txtFile.getAbsolutePath(),
+                                                                folder.getAbsolutePath() + "\\old\\"
+                                                                        + novel.getOldTxtName()
+                                                                        + novel.getFileType());
                                                     }
                                                 }
 
-                                                // Elements chapterScripts = doc.select("#chapters-json");
-                                                // for (Element chapterStr : chapterScripts) {
-                                                // com.google.gson.JsonArray chapters = new
-                                                // JsonParser().parse(chapterStr.data()).getAsJsonArray();
-                                                // List<com.google.gson.JsonObject> chaptersList =
-                                                // sortJsonArrToList(chapters);
-
-                                                // for (JsonObject chapterJson : chaptersList) {
-
-                                                // String chapterTitle =
-                                                // CommonUtils.getInstance().toTraditional(chapterJson.get("title").getAsString());
-                                                // String chapterUrl = chapterJson.get("id").getAsString();
-                                                // System.out.println("Chapter Title: " + chapterTitle + ", Chapter URL:
-                                                // " + chapterUrl);
-
-                                                // }
-                                                // }
-                                            } else {
-                                                System.out.println("is is null");
                                             }
 
                                         } catch (Exception e) {
@@ -176,27 +249,23 @@ public class GetNovels {
                                         // view = + "*/catalog"
                                         System.out.println("linovelib prepare to get novel");
                                         // TODO linovelib & Masiro combine to urlNovel
-                                        Masiro novel = new Masiro(txtName);
-                                        Map<String, String> urlConfigMap = new HashMap<>();
+                                        
                                         String urlBase = (configMap.get("view").startsWith("https")
                                                 ? configMap.get("view")
                                                 : "https://" + configMap.get("view")) + novel.getUrlID();
                                         String viewUrl = urlBase + "/catalog";
-                                        urlConfigMap.put("url", viewUrl);
-                                        urlConfigMap.put("Cookie", configMap.get("Cookie"));
-                                        urlConfigMap.put("Referer", viewUrl);
+                                        novelConfig.put("url", viewUrl);
+                                        novelConfig.put("Cookie", configMap.get("Cookie"));
+                                        novelConfig.put("Referer", viewUrl);
 
-                                        System.out.println("novelConfig: " + urlConfigMap);
+                                        System.out.println("novelConfig: " + novelConfig);
 
-                                        // InputStream is =
-                                        // GwWebService.getInstance(null).urlToInputStream(novelConfig);
-                                        // Document doc = Jsoup.parse(is, "UTF-8", "");
-                                        Document viewDoc = GwWebService.getInstance(log).urlToJsoupDoc(urlConfigMap);
+                                        Document viewDoc = GwWebService.getInstance(log).urlToJsoupDoc(novelConfig);
                                         // start view
                                         String title = viewDoc.select("title").first().text();
                                         System.out.println("title ------== " + title);
                                         String nextUrlString = "";
-                                        
+
                                         String chapterUrlName = "";
                                         Elements chaptersElements = viewDoc.select(".chapter-li.jsChapter a");
                                         for (Element chapterElement : chaptersElements) {
@@ -222,32 +291,31 @@ public class GetNovels {
                                                 Thread.sleep(5500);
                                                 System.out.println(loopcount + " loopcount: " + nextUrlString);
                                                 // if (loopcount > 2) {
-                                                //     break;
+                                                // break;
                                                 // }
 
                                                 if (nextUrlString.endsWith(".html")) {
                                                     boolean isNewChapter = true;
-                                                    if(!StringUtils.contains(nextUrlString, "_")) {
+                                                    if (!StringUtils.contains(nextUrlString, "_")) {
                                                         chapterCount++;
                                                         isNewChapter = false;
                                                     }
-                                                    
-                                                    urlConfigMap.replace("Referer", urlConfigMap.get("url"));
-                                                    urlConfigMap.replace("url", (nextUrlString.startsWith("https")
+
+                                                    novelConfig.replace("Referer", novelConfig.get("url"));
+                                                    novelConfig.replace("url", (nextUrlString.startsWith("https")
                                                             ? nextUrlString
                                                             : "https://" + configMap.get("read") + nextUrlString));
-                                                    
-                                                    System.out.println("urlConfig: " + urlConfigMap);
+
+                                                    System.out.println("urlConfig: " + novelConfig);
                                                     Document chapterDoc = GwWebService.getInstance(log)
-                                                            .urlToJsoupDoc(urlConfigMap);
-                                                    
+                                                            .urlToJsoupDoc(novelConfig);
+
                                                     if (isNewChapter) {
-                                                        String chapterTitle = chapterDoc.select("#atitle").first().text();
+                                                        String chapterTitle = chapterDoc.select("#atitle").first()
+                                                                .text();
                                                         txtContent.append("\n\n"); // Add a newline before each chapter
                                                         txtContent.append(chapterTitle + "\n\n");
                                                     }
-                                                    
-
 
                                                     Elements paragraphs = chapterDoc.select("div#acontent1 p");
                                                     Elements lineBreaks = chapterDoc.select("div#acontent1 br");
@@ -268,36 +336,44 @@ public class GetNovels {
                                                         }
 
                                                         txtContent.append("\n"); // Add a newline after each paragraph
-                                                    }   // end of for (Element paragraph : paragraphs)
+                                                    } // end of for (Element paragraph : paragraphs)
 
                                                     // System.out.println("Chapter Title: " + chapterTitle);
                                                     // System.out.println("Chapter Content: " + txtContent);
 
-                                                    Element linkElement = chapterDoc.select("link[rel=prerender]").first();
+                                                    Element linkElement = chapterDoc.select("link[rel=prerender]")
+                                                            .first();
                                                     nextUrlString = linkElement.attr("href");
                                                     // System.out.println("Next URL: " + nextUrlString);
-                                                }else{
+                                                } else {
                                                     nextUrlString = "";
-                                                }  // end if (nextUrlString.endsWith(".html"))
+                                                } // end if (nextUrlString.endsWith(".html"))
                                                 loopcount++;
                                             } // end of while (!StringUtils.isBlank(nextUrlString))
                                         } // end of if (!StringUtils.isBlank(nextUrlString))
 
                                         // txtContent
                                         // newTxtName : "小說名稱_urlID_總共章節數量_更新日期
-                                        
-                                        if(novel.isUpdate(chapterCount)){
+
+                                        if (novel.isUpdate(chapterCount)) {
                                             System.out.println("chapterCount: ===" + chapterCount);
-                                            if (CommonUtils.getInstance(log).createTxtFile(folder.getAbsolutePath(), novel.getNewTxtName(chapterCount) + novel.getFileType(), txtContent)){
-                                                System.out.println("Create txt file success: " + novel.getNewTxtName(chapterCount));
-                                                System.out.println("txtFile.getAbsolutePath(): " + txtFile.getAbsolutePath());
+                                            if (CommonUtils.getInstance(log).createTxtFile(folder.getAbsolutePath(),
+                                                    novel.getNewTxtName(chapterCount) + novel.getFileType(),
+                                                    txtContent)) {
+                                                System.out.println("Create txt file success: "
+                                                        + novel.getNewTxtName(chapterCount));
+                                                System.out.println(
+                                                        "txtFile.getAbsolutePath(): " + txtFile.getAbsolutePath());
                                                 // txtFile.delete();
-                                                CommonUtils.getInstance(log).moveFile(txtFile.getAbsolutePath(), folder.getAbsolutePath() + "\\old\\" + novel.getOldTxtName() + novel.getFileType());
+                                                CommonUtils.getInstance(log).moveFile(txtFile.getAbsolutePath(),
+                                                        folder.getAbsolutePath() + "\\old\\" + novel.getOldTxtName()
+                                                                + novel.getFileType());
                                             }
                                         }
                                         System.out.println("chapterCount: " + chapterCount);
-                                        System.out.println("novel.getNewTxtName(chapterCount): " + novel.getNewTxtName(chapterCount));
-                                    } // end of if ("Masiro_XXX".equals(folderName))
+                                        System.out.println("novel.getNewTxtName(chapterCount): "
+                                                + novel.getNewTxtName(chapterCount));
+                                    } // end of if (SPEC_Folder.equals(folderName))
                                 } // end of if (!txtName.matches)
                             } // end of for (File txtFile : txtFiles)
                         } // end of if (txtFiles != null)
@@ -331,14 +407,4 @@ public class GetNovels {
         });
         return list;
     }
-
-    // public com.google.gson.JsonArray sortJsonArrToArray(com.google.gson.JsonArray
-    // jsonArray) {
-    // List<com.google.gson.JsonObject> list = sortJsonArrToList(jsonArray);
-    // com.google.gson.JsonArray sortedArray = new com.google.gson.JsonArray();
-    // for (com.google.gson.JsonElement element : list) {
-    // sortedArray.add(element);
-    // }
-    // return sortedArray;
-    // }
 }

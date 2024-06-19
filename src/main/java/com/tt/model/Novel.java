@@ -6,7 +6,7 @@ import java.util.Date;
 
 import com.tt.util.CommonUtils;
 
- public class Masiro {
+ public class Novel {
     private String fileName = "";
     private String dirName = "";
     private String novelName = "";
@@ -18,11 +18,11 @@ import com.tt.util.CommonUtils;
 
     private int newChapters = 0;
 
-    public Masiro() {
+    public Novel() {
     }
 
     // txtName : "小說名稱_urlID_總共章節數量_更新日期.txt"
-    public Masiro(String txtName) {
+    public Novel(String txtName) {
         if (txtName == null || txtName.isEmpty()) {
             throw new IllegalArgumentException("Invalid txtName");
         }
